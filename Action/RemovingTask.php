@@ -1,6 +1,6 @@
 <?php
 
-namespace Kanboard\Plugin\AutomaticAction\Action;
+namespace Kanboard\Plugin\TaskRemoveAfterMentionDayAction\Action;
 
 use Kanboard\Model\TaskModel;
 use Kanboard\Action\Base;
@@ -11,7 +11,7 @@ use Kanboard\Action\Base;
  * @package action
  * @author  Frederic Guillot
  */
-class TaskRename extends Base
+class RemovingTask extends Base
 {
     /**
      * Get automatic action description
@@ -21,7 +21,7 @@ class TaskRename extends Base
      */
     public function getDescription()
     {
-        return t('Change the task title when the task is moved to another column');
+        return t('Remove Task in a specific column when it mention day.');
     }
 
     /**
@@ -33,7 +33,7 @@ class TaskRename extends Base
     public function getCompatibleEvents()
     {
         return array(
-            TaskModel::EVENT_MOVE_COLUMN,
+            TaskModel::EVENT_DAILY_CRONJOB,
         );
     }
 
@@ -46,7 +46,8 @@ class TaskRename extends Base
     public function getActionRequiredParameters()
     {
         return array(
-            'title' => t('Title'),
+            'duration' => t('Duration in days'),
+            'column_id' => t('Column')
         );
     }
 
@@ -58,9 +59,7 @@ class TaskRename extends Base
      */
     public function getEventRequiredParameters()
     {
-        return array(
-            'task_id',
-        );
+        return array('tasks');
     }
 
     /**
@@ -72,7 +71,18 @@ class TaskRename extends Base
      */
     public function doAction(array $data)
     {
-        return $this->taskModificationModel->update(array('id' => $data['task_id'], 'title' => $this->getParam('title')));
+        $results = array();
+        $max = $this->getParam('duration') * 86400;
+
+        foreach ($data['tasks'] as $task) {
+            $duration = time() - $task['date_moved'];
+
+            if ($duration > $max && $task['column_id'] == $this->getParam('column_id')) {
+                $results[] = $this->taskModel->remove($task['id']);
+            }
+        }
+
+        return in_array(true, $results, true);
     }
 
     /**
@@ -84,6 +94,6 @@ class TaskRename extends Base
      */
     public function hasRequiredCondition(array $data)
     {
-        return true;
+        return count($data['tasks']) > 0;
     }
 }
